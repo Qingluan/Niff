@@ -53,10 +53,10 @@ class Payload:
             return self.re_complier.findall(content)[0]
 
         except IndexError:
-            L(payload, color='red')
-            L(response, color='white',on='on_red')
+            # L(payload, color='red')
+            # L(response, color='white',on='on_red')
             # raise Exception("this payload error , no res got : ")
-            return response
+            return ''
 
         except UnicodeDecodeError as e:
             L(response,color='yellow')
@@ -82,7 +82,7 @@ class Payload:
 
         if not dir_tree.startswith("/"):
             self.disks = [ i+":" for i in dir_tree.split(":") if i]
-        self.cur_user = cur_user
+        self.user = cur_user
 
     def ls(self, path=''):
         if not path:
@@ -95,8 +95,8 @@ class Payload:
                 p['z1'] = self.pwd + path
             else:
                 p['z1'] = self.pwd + self.delta + path
-
-        return Files(self.pwd,*self.post(p).strip().split("\n")[2:])
+        dirs = [ i for i in self.post(p).strip().split("\n") if not i.startswith("./") and not i.startswith("../")]
+        return Files(self.pwd,*dirs)
 
     def cd(self, path):
         if path == "..":
@@ -141,7 +141,12 @@ class File:
             self.size = one['size']
             self.perm = one['perm']
         elif isinstance(one, str):
-            self.name ,self.time ,self.size ,self.perm  = one.split("\t")
+            val = one.split("\t")
+            if len(val) == 4:
+                self.name ,self.time ,self.size ,self.perm  = val
+            else:
+                self.name = val[0]
+                self.time ,self.size ,self.perm  = '',0,0
 
         self.is_dir = False
         if self.name.endswith("/") or self.name.endswith("\\"):

@@ -2,7 +2,14 @@ from .log import Pane, L
 from .lib import File, Files
 from Niff import payloads
 from copy import copy
+from string import printable
+from termcolor import colored
 import os
+
+ALL_KEY = printable + '\x7f'
+ALL_KEY = ALL_KEY.replace('\t','').replace('\x0b','').replace('\x0c','').replace('\r','')
+
+
 father = []
 father_loc = []
 
@@ -15,22 +22,35 @@ def ranger(target, passwd, LanguageApiName, charset='utf8'):
     language_api = LanguageApi(target, passwd, charset='gbk')
     language_api.init()
 
-    f = language_api.ls()
+    this = language_api.ls()
+    f = language_api.ls('..')
     p.add_c(f.fs)
+    p.add_c(this.fs)
+    p.move('right')
+    # p.locs = [0,0]
 
     def change(pane, key):
         item = File.got(pane.cur)
-        pane.bottom_bar(item.name,item.time, item.size, item.perm, "| ",language_api.pwd)
+        pane.bottom_bar(len(pane.locs), len(pane.columns),item.name,item.time, item.size, item.perm, "| ",language_api.pwd)
 
     
     def up_down(pane, key):
         item = File.got(pane.cur)
         if item.name.endswith("/") or item.name.endswith("\\"):
             # language_api.cd(item.name)
-            pane.set_c(1,language_api.ls(item.name).fs)
+            fs = language_api.ls(item.name).fs
+            if fs:
+                pane.set_c(2,fs)
+            else:
+                item.is_dir = False
+                try:
+                    pane.del_c(2)
+                except :
+                    pass
+
         else:
             try:
-                pane.del_c(1)
+                pane.del_c(2)
             except :
                 pass
         change(pane, key)
@@ -44,17 +64,23 @@ def ranger(target, passwd, LanguageApiName, charset='utf8'):
         if item.name.endswith("/") or item.name.endswith("\\"):
             # language_api.cd(item.name)
             # pane.clear()
-            language_api.cd(pane.cur)
-            father.append(copy(pane.columns[0]))
-            sub = language_api.ls().fs
-            try:
-                pane.del_c(1)
-
-            except:
-                pass
-            pane.del_c(0)
-            pane.add_c(sub)
-        change(pane, key)
+            sub = language_api.ls(pane.cur).fs
+            if sub:
+                language_api.cd(pane.cur)
+                fa = copy(pane.columns[0])
+                cu = copy(pane.columns[1])
+                father.append(fa)
+            
+                try:
+                    pane.del_c(0)
+                    pane.del_c(1)
+                    pane.del_c(2)
+                except:
+                    pass
+                
+                pane.set_c(0, cu)
+                pane.add_c(sub)
+        up_down(pane, key)
     
     def l(pane, key):
         global father
@@ -62,121 +88,117 @@ def ranger(target, passwd, LanguageApiName, charset='utf8'):
         # item = File.got(pane.cur)
         if language_api.pwd in language_api.disks:
             return
-        cur = copy(pane.columns[0])
+        cur = copy(pane.columns[1])
+        fa = copy(pane.columns[0])
         language_api.cd("..")
         try:
+            pane.del_c(0)
             pane.del_c(1)
+            pane.del_c(2)
         except:
             pass
-        pane.del_c(0)
+        
         if father:
-            pane.add_c(father.pop())
+            # pane.set_c(0, pop())
+            pane.set_c(0,father.pop())
+            pane.set_c(1,fa)
+            pane.set_c(2,cur)
             
         else:
-            pane.add_c(language_api.ls().fs)
+            pane.set_c(0,language_api.ls('..').fs)
+            pane.set_c(1,fa)
+            pane.set_c(2,cur)
 
         if father_loc:
             pane.loc = father_loc.pop()
         else:
-            pane.loc = [0,0]
+            pane.loc = [1,0]
 
-        if len(pane.locs) > 1:
+        # if len(pane.locs) > 2:
 
-            pane.locs = pane.locs[1:]
-        else:
-            pane.locs = [pane.loc[1]]
-        
+        #     pane.locs = pane.locs[1:]
+        # else:
+        pane.locs = [0,0,pane.loc[1]]
+        fa = language_api.pwd.split(language_api.delta)[-1]
+        pane.loc_to(0, fa)
+        # up_down(pane, key)
         change(pane, key)
 
-    def search(pane, key):
-        # old = 
-        key_map = pane.key_map.copy()
-        key_map_after = pane.key_map_after.copy()
-        key_map_before = pane.key_map_before.copy()
-        key_map_move = pane.key_map_move.copy()
+    def on_cmd(pane, key):
+        
+        pane.change_mode(Pane.CMD_MODE)
+        pane.bottom_bar("Enter cmd mode: type'\\n\\n' to exit")
+        if not hasattr(pane, 'cmd_str'):
+            pane.cmd_str = ''
+        # language_api.init()
+        def cmd(pane, key):
+            if key == '\n':
 
-        pane.key_map
-        pane.bottom_bar("start search >>")
+                if hasattr(pane, 'enter'):
+                    pane.change_mode(Pane.DIR_MODE)
+                    del pane.enter
+                    pane.bottom_bar("Exit cmd mode!")
+                    try:
+                        pane.del_c(2)
+                    except IndexError:
+                        pane.del_c(1)
 
-        def search_listen(pane, k):
-            not_found_search_str = ''
-            if k == '\n':
-                pane.key_map = key_map
-                pane.key_map_after = key_map_after
-                pane.key_map_before = key_map_before
-                pane.key_map_move = key_map_move
-                pane.bottom_bar("search mode exit.")
-                return
-
-            dirs = pane.columns[pane.loc[0]]
-            if hasattr(pane, 'search_str'):
-                pane.search_str += k
-            else:
-                pane.search_str = k
-
-            # deal with special char
-            if ord(k) == 127:
-                pane.search_str = pane.search_str[:-2]
-
-            
-            
-
-            loc = copy(pane.loc)
-            s_str = pane.search_str
-            found = False
-            for i,d in enumerate(dirs):
-                if s_str in d:
-                    loc[1] = i
-                    found = True
-
-            if not found:
-                not_found_search_str = pane.search_str
-                pane.search_str = ''
-                if pane.search_str == 'exit':
-                    pane.key_map = key_map
-                    pane.key_map_after = key_map_after
-                    pane.key_map_before = key_map_before
-                    pane.key_map_move = key_map_move
-            else:
-                if loc[1] > pane.loc[1]:
-                    for i in range(loc[1] - pane.loc[1]):
-                        pane.move("down")
-                    change(pane, k)
-                elif loc[1] < pane.loc[1]:
-                    for i in range(pane.loc[1] - loc[1]):
-                        pane.move("up")
-                    change(pane, k)
-
-            if not found:
-                pane.bottom_bar("search not found " + "("+ not_found_search_str + ") >>" )
-            else:
-                pane.bottom_bar("search > ", pane.search_str)
+                    change(pane, key)
+                    return
+                else:
+                    setattr(pane, 'enter', '\n')
                 
 
+                if hasattr(pane, 'cmd_str'):
+                    if pane.cmd_str.startswith("cd"):
+                        d = pane.cmd_str.split()[1:]
+                        if d:
+                            language_api.cd(d[0])
+                            pane.cmd_str = ''
+                            pane.bottom_bar(language_api.user, language_api.os.split()[0],"|", language_api.pwd, colored(">" + pane.cmd_str, 'cyan',attrs=['underline']), color='yellow')
+                            return
+                        else:
+                            return
 
-            # change(pane, k)
-        pane.key_map_after =  dict()
-        pane.key_map = dict()
-        pane.key_map_before = dict()
-        pane.key_map_move = dict()
-        [pane.set_on_keyboard_listener(i, search_listen) for i in 'qwertyuiopasdfghjklzxcvbnm1234567890`~!@#$%^&*()-=_+.\n']
-        pane.set_on_keyboard_listener('\x7f', search_listen)
-        
+                    if len(pane.columns) == 1:
+                        fa_res = []
+                        pass
+                    else:
+                        fa_res = pane.columns[len(pane.columns) - 1][1:]
+                        pane.del_c(len(pane.columns) - 1)
 
-            
+                    real_content =  language_api.cmd(pane.cmd_str).split("\n")
+                    real_content = ['-' * (int(int(pane.w - pane.now_w) / 4) )  + '  Shell. ' + '-' * (int((pane.w - pane.now_w) /4) -1 )] + real_content
+                    real_content += ['-' * int((pane.w - pane.now_w)/2) ]
+                    real_content += fa_res
+                    pane.add_c(real_content)
+                    pane.set_c_attr(len(pane.columns) - 1, color='red')
+                    
+                    
+                    pane.cmd_str = ''
 
-            # change(pane)
+                
 
+            else:
+                pane.cmd_str += key
+                if hasattr(pane, 'enter'):
+                    del pane.enter
 
+            if ord(key) == 127:
+                pane.cmd_str = pane.cmd_str[:-2]
 
+            pane.bottom_bar(language_api.user, language_api.os.split()[0],"|", language_api.pwd, colored(">" + pane.cmd_str, 'cyan',attrs=['underline']), color='yellow')
 
-    p.set_after_keyboard_listener('k', up_down)
-    p.set_after_keyboard_listener('j', up_down)
-    p.set_after_keyboard_listener('h', l)
-    p.set_on_keyboard_listener('l', r)
+        [pane.set_on_keyboard_listener(i, Pane.CMD_MODE, cmd) for i in ALL_KEY ]
+
+    p.set_after_keyboard_listener('k',Pane.DIR_MODE, up_down)
+    p.set_after_keyboard_listener('j',Pane.DIR_MODE, up_down)
+    p.set_after_keyboard_listener('h',Pane.DIR_MODE, l)
+    p.set_on_keyboard_listener('l',Pane.DIR_MODE, r)
+    p.set_on_keyboard_listener('c', Pane.DIR_MODE, on_cmd)
+    # [p.set_after_keyboard_listener(i, Pane.DIR_MODE | Pane.SEARCH_MODE , change) for i in 'hjkl']
 
     # for kinds of modes
-    p.set_on_keyboard_listener('f', search)
 
     p.on_keyboard()
 

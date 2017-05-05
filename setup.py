@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 
 setup(name='Niff',
-    version='0.1',
+    version='0.3',
     description='a tool',
     url='https://github.com/Qingluan/.git',
     author='Qing luan',

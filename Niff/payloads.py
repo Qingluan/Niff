@@ -1,7 +1,7 @@
 from .lib import Payload
 
 
-class Php(Payload):
+class php(Payload):
     """
     only need to set follow string:
 
